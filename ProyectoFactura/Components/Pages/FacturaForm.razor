@@ -1,0 +1,164 @@
+﻿@rendermode InteractiveServer
+@page "/facturaform/{Id:int?}"
+@using ProyectoFactura.Models
+@using Microsoft.EntityFrameworkCore;
+@inject FacturaContext _context
+@inject NavigationManager navigationManager
+
+<h3>@(Id.HasValue ? "Editar Factura" : "Nueva Factura")</h3>
+@if (factura != null)
+{
+    //
+    <EditForm Model="factura" OnValidSubmit="GuardarFactura" class="container">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label class="form-label">Número de Factura:</label>
+                <InputText @bind-Value="factura.NumeroFactura" class="form-control" placeholder="Número de factura" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">RUC:</label>
+                <InputText @bind-Value="factura.Ruc" class="form-control" placeholder="RUC del cliente" />
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label class="form-label">Razón Social:</label>
+                <InputText @bind-Value="factura.RazonSocial" class="form-control" placeholder="Razón Social" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Fecha de Emisión:</label>
+                <InputDate @bind-Value="factura.FechaEmision" class="form-control" />
+            </div>
+        </div>
+
+        <h4>Detalles de la Factura</h4>
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label class="form-label">Código Producto:</label>
+                <InputText @bind-Value="nuevoDetalle.CodigoProducto" class="form-control" placeholder="Código del producto" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Descripción:</label>
+                <InputText @bind-Value="nuevoDetalle.Descripcion" class="form-control" placeholder="Descripción del producto" />
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label class="form-label">Precio Unitario:</label>
+                <InputNumber @bind-Value="nuevoDetalle.PrecioUnitario" class="form-control" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Cantidad:</label>
+                <InputNumber @bind-Value="nuevoDetalle.Cantidad" class="form-control" />
+            </div>
+        </div>
+
+        <button type="button" class="btn btn-secondary" @onclick="AgregarDetalle">Agregar Detalle</button>
+
+        <!-- Mostrar los detalles agregados -->
+        <table class="table mt-4">
+            <thead>
+                <tr>
+                    <th>Código Producto</th>
+                    <th>Descripción</th>
+                    <th>Precio Unitario</th>
+                    <th>Cantidad</th>
+                    <th>Subtotal</th>
+                    <th>IGV</th>
+                    <th>Total con IGV</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var detalle in factura.FacturaDetalles)
+                {
+                    <tr>
+                        <td>@detalle.CodigoProducto</td>
+                        <td>@detalle.Descripcion</td>
+                        <td>@detalle.PrecioUnitario</td>
+                        <td>@detalle.Cantidad</td>
+                        <td>@detalle.CalcularSubtotal()</td>
+                        <td>@detalle.CalcularIGV()</td>
+                        <td>@detalle.CalcularTotalConIGV()</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+  
+        <div class="d-flex justify-content-end mt-3">
+            <div>
+                <h4>Total IGV: @factura.FacturaDetalles.Sum(d => d.CalcularIGV())</h4>
+                <h4>Total Factura: @factura.FacturaDetalles.Sum(d => d.CalcularTotalConIGV())</h4>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Guardar</button>
+        <button type="button" class="btn btn-secondary" @onclick="Cancelar">Cancelar</button>
+    </EditForm>
+
+}
+else
+{
+    <p> "Cargando ...."</p>
+}
+
+@code {
+    private FacturaCabecera factura = new FacturaCabecera();
+    private FacturaDetalle nuevoDetalle = new FacturaDetalle();
+    [Parameter] public int? Id { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id.HasValue)
+        {
+            factura = await _context.FacturaCabeceras
+                        .Include(f => f.FacturaDetalles)
+                        .FirstOrDefaultAsync(f => f.FacturaId == Id.Value) ?? new FacturaCabecera();
+        }
+        else
+        {
+            factura = new FacturaCabecera
+                {
+                    FacturaDetalles = new List<FacturaDetalle>()
+                };
+        }
+    }
+
+    // Método para agregar un nuevo detalle a la lista sin cerrar el formulario
+    void AgregarDetalle()
+    {
+        factura.FacturaDetalles.Add(nuevoDetalle);
+        nuevoDetalle = new FacturaDetalle(); // Limpiar para ingresar un nuevo detalle
+    }
+
+    async Task GuardarFactura()
+    {
+        try
+        {
+            if (Id.HasValue)
+            {
+                _context.FacturaCabeceras.Update(factura);  // Actualizar si ya existe
+            }
+            else
+            {
+                _context.FacturaCabeceras.Add(factura);  // Agregar una nueva factura
+            }
+            await _context.SaveChangesAsync();  // Guardar los cambios en la base de datos
+            navigationManager.NavigateTo("/facturas");  // Redirigir a la lista de facturas
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al guardar la factura: {ex.Message}");
+            // Puedes mostrar un mensaje al usuario si es necesario
+        }
+    }
+    void Cancelar()
+    {
+        navigationManager.NavigateTo("/facturas");
+    }
+}

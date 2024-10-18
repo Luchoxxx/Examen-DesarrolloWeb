@@ -1,0 +1,82 @@
+﻿@rendermode InteractiveServer
+@page "/facturas"
+@using Microsoft.EntityFrameworkCore
+@using ProyectoFactura.Models
+@inject FacturaContext _context
+@inject NavigationManager navigationManager
+
+<h3>Lista de Facturas</h3>
+
+<button class="btn btn-primary" @onclick="NuevaFactura">Nueva Factura</button>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Número de Factura</th>
+            <th>RUC</th>
+            <th>Razón Social</th>
+            <th>Fecha de Emisión</th>
+            <th>Total</th>
+            <th>Acciones</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var factura in facturas)
+        {
+            <tr>
+                <td>@factura.NumeroFactura</td>
+                <td>@factura.Ruc</td>
+                <td>@factura.RazonSocial</td>
+                <td>@factura.FechaEmision.ToShortDateString()</td>
+                <td>@factura.FacturaDetalles.Sum(d => d.CalcularTotalConIGV())</td>
+                <td>
+                    <button class="btn btn-warning" @onclick="() => EditarFactura(factura.FacturaId)">Editar</button>
+                    <button class="btn btn-danger" @onclick="() => EliminarFactura(factura.FacturaId)">Eliminar</button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private List<FacturaCabecera> facturas = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        facturas = await _context.FacturaCabeceras
+            .Include(f => f.FacturaDetalles) // Incluimos los detalles para calcular el total
+            .ToListAsync();
+    }
+
+    void NuevaFactura()
+    {
+        navigationManager.NavigateTo("/facturaform");
+    }
+
+    void EditarFactura(int id)
+    {
+        navigationManager.NavigateTo($"/facturaform/{id}");
+    }
+
+    async Task EliminarFactura(int id)
+    {
+
+        var factura = await _context.FacturaCabeceras
+         .Include(f => f.FacturaDetalles) // Incluye los detalles de la factura
+         .FirstOrDefaultAsync(f => f.FacturaId == id);
+
+        if (factura != null)
+        {
+            // Eliminar primero los detalles de la factura
+            _context.FacturaDetalles.RemoveRange(factura.FacturaDetalles);
+
+            // Luego eliminar la factura
+            _context.FacturaCabeceras.Remove(factura);
+            await _context.SaveChangesAsync();
+
+            // Actualiza la lista de facturas
+            facturas = await _context.FacturaCabeceras.Include(f => f.FacturaDetalles).ToListAsync();
+        }
+    }
+}
+
